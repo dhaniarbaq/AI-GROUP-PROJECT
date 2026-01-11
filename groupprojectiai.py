@@ -10,6 +10,7 @@ Original file is located at
 # ===============================
 # FAKE NEWS DETECTION SYSTEM
 # ===============================
+pip install beautifulsoup4
 
 import streamlit as st
 import pandas as pd
