@@ -6,6 +6,7 @@ from datetime import datetime
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import classification_report
 
@@ -15,52 +16,53 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- TRAINING DATA ----------------
-# IMPORTANT
-# For better performance you should replace this with a much larger
-# dataset of both real and fake news articles.
-# Load from a CSV if available: pd.read_csv("your_dataset.csv")
+# ---------------- LOAD DATASET ----------------
+@st.cache_data
+def load_data():
+    df = pd.read_csv("FakeNewsNet.csv")
 
-data = {
-    "text": [
-        "Breaking news miracle cure discovered overnight",
-        "Government announces new education policy today",
-        "Shocking secret revealed about vaccines",
-        "Prime minister met foreign leaders yesterday",
-        "Experts warn phones will explode tonight",
-        "Economic growth increased by three percent this year",
-        "Celebrity claims salt water cures all diseases",
-        "New tax regulation introduced for small businesses",
-        "Renowned scientist explains climate change findings",
-        "Local hospital invests in new cancer treatment tech"
-    ],
-    "label": [1, 0, 1, 0, 1, 0, 1, 0, 0, 0]  # 1 = Fake, 0 = Genuine
-}
+    # Rename for consistency
+    df = df.rename(columns={
+        "title": "text",
+        "real": "label"
+    })
 
-df = pd.DataFrame(data)
+    # Drop missing values
+    df = df.dropna(subset=["text", "label", "source_domain"])
 
-# we can balance if needed
-# df = pd.concat([df[df.label == 0].sample(50), df[df.label == 1].sample(50)])
+    return df
+
+df = load_data()
 
 # ---------------- MODEL TRAINING ----------------
 @st.cache_resource
 def train_model(dataframe):
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("text", TfidfVectorizer(
+                lowercase=True,
+                stop_words="english",
+                ngram_range=(1,2),
+                min_df=5,
+                max_df=0.9,
+                sublinear_tf=True
+            ), "text"),
+
+            ("domain", TfidfVectorizer(), "source_domain")
+        ]
+    )
+
     model = Pipeline([
-        ("tfidf", TfidfVectorizer(
-            lowercase=True,
-            stop_words="english",
-            ngram_range=(1, 3),
-            min_df=2,
-            max_df=0.85
-        )),
+        ("features", preprocessor),
         ("classifier", LogisticRegression(
-            max_iter=3000,
+            max_iter=4000,
             class_weight="balanced"
         ))
     ])
 
     X_train, X_test, y_train, y_test = train_test_split(
-        dataframe["text"],
+        dataframe[["text", "source_domain"]],
         dataframe["label"],
         test_size=0.25,
         random_state=42,
@@ -69,7 +71,6 @@ def train_model(dataframe):
 
     model.fit(X_train, y_train)
 
-    # Optional evaluation report in logs
     preds = model.predict(X_test)
     print(classification_report(y_test, preds))
 
@@ -84,121 +85,98 @@ if "history" not in st.session_state:
 # ---------------- SIDEBAR ----------------
 st.sidebar.title("📰 Fake News Detection System")
 st.sidebar.subheader("System Overview")
-st.sidebar.write("Natural Language Processing classification")
+st.sidebar.write("NLP + Source Domain Classification")
 st.sidebar.text("Model: TF-IDF + Logistic Regression")
-st.sidebar.text("Prediction Type: Probabilistic with Thresholding")
-st.sidebar.success("System Status Operational")
-st.sidebar.caption("Version 2.0 | 2026")
+st.sidebar.success("System Operational")
 
 # ---------------- TABS ----------------
 tab_home, tab_analyzer, tab_dashboard, tab_reports = st.tabs(
     ["Home", "Analyzer", "Dashboard", "Reports"]
 )
 
+# ---------------- HOME ----------------
 with tab_home:
     st.header("Welcome")
-    st.write(
-        """
-        This improved system helps you check if a piece of news is likely fake.
-        It uses better features and a balanced model so it is more reliable
-        when you feed it real published news.
-        """
-    )
-    st.info("This model is a supporting tool and does not perform factual verification.")
+    st.write("""
+    This system uses **23,000+ real news headlines** from FakeNewsNet.
+    It analyzes both **text content** and **news source domain**
+    to detect misinformation.
+    """)
+    st.info("This tool predicts likelihood — it does not fact-check.")
 
+# ---------------- ANALYZER ----------------
 with tab_analyzer:
     st.header("🧠 News Analyzer")
 
-    text_input = st.text_area(
-        "Enter news text for analysis",
-        height=200
-    )
+    text_input = st.text_area("Enter news headline", height=120)
+    domain_input = st.text_input("Enter source domain (e.g. cnn.com, bbc.com)")
 
     if st.button("Analyze"):
-        if not text_input.strip():
-            st.warning("Please enter some text before analysis.")
+        if not text_input.strip() or not domain_input.strip():
+            st.warning("Please enter both headline and source domain.")
         else:
-            proba = model.predict_proba([text_input])[0]
-            proba_fake = proba[1]
-            proba_real = proba[0]
+            X_input = pd.DataFrame([{
+                "text": text_input,
+                "source_domain": domain_input
+            }])
 
-            # smarter threshold
+            proba = model.predict_proba(X_input)[0]
+
+            # FakeNewsNet: 1 = Real, 0 = Fake
+            proba_real = proba[1]
+            proba_fake = proba[0]
+
             threshold = 0.60
 
-            if proba_fake > threshold and proba_fake > proba_real:
-                prediction = 1
+            if proba_fake > threshold:
                 label = "Likely Fake News"
                 confidence = proba_fake
             else:
-                prediction = 0
                 label = "Likely Genuine News"
                 confidence = proba_real
 
             col1, col2 = st.columns(2)
-            with col1:
-                st.metric("Prediction", label)
-            with col2:
-                st.metric("Confidence", f"{confidence * 100:.2f}%")
+            col1.metric("Prediction", label)
+            col2.metric("Confidence", f"{confidence*100:.2f}%")
 
             st.progress(int(confidence * 100))
 
-            # Explainability features
-            tfidf = model.named_steps["tfidf"]
-            classifier = model.named_steps["classifier"]
-
-            feature_names = tfidf.get_feature_names_out()
-            coefs = classifier.coef_[0]
-
-            sorted_features = sorted(
-                zip(feature_names, coefs),
-                key=lambda x: abs(x[1]),
-                reverse=True
-            )[:8]
-
-            features_str = ", ".join([f"{w}" for w, c in sorted_features])
-
-            st.markdown("### Why the model thinks so")
-            st.write(
-                "Important keywords influencing the decision include:"
-            )
-            st.write(features_str)
-
-            st.caption(
-                "Confidence is based on model’s internal text pattern recognition"
-            )
-
             st.session_state.history.append({
                 "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "Text Sample": text_input[:50] + "...",
+                "Headline": text_input[:50] + "...",
+                "Source": domain_input,
                 "Prediction": label,
                 "Confidence": round(confidence * 100, 2)
             })
 
+# ---------------- DASHBOARD ----------------
 with tab_dashboard:
-    st.header("📊 Dashboard Summary")
+    st.header("📊 Dashboard")
 
     if st.session_state.history:
         history_df = pd.DataFrame(st.session_state.history)
         history_df["Time"] = pd.to_datetime(history_df["Time"])
 
-        st.subheader("Predictions Overview")
+        st.subheader("Prediction Distribution")
         st.bar_chart(history_df["Prediction"].value_counts())
 
-        st.subheader("Mean Confidence")
-        st.metric("Average Confidence", f"{history_df['Confidence'].mean():.2f}%")
+        st.subheader("Average Confidence")
+        st.metric("Mean", f"{history_df['Confidence'].mean():.2f}%")
 
-        st.subheader("Confidence Trend")
+        st.subheader("Confidence Over Time")
         st.line_chart(history_df.set_index("Time")["Confidence"])
     else:
-        st.info("No analyses run yet.")
+        st.info("Run some analyses first.")
 
+# ---------------- REPORTS ----------------
 with tab_reports:
     st.header("📄 Reports")
+
     if st.session_state.history:
         reports_df = pd.DataFrame(st.session_state.history)
         st.dataframe(reports_df, use_container_width=True)
 
         csv = reports_df.to_csv(index=False).encode("utf-8")
-        st.download_button("Download Report as CSV", csv, "fake_news_report.csv", "text/csv")
+        st.download_button("Download CSV", csv, "fake_news_report.csv", "text/csv")
     else:
-        st.info("Please analyze news to generate reports.")
+        st.info("No data yet.")
