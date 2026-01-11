@@ -5,17 +5,11 @@
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-import re
-import requests
-from bs4 import BeautifulSoup
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
-import joblib
-import random
 import time
 
 # -------------------------------
@@ -30,7 +24,6 @@ st.set_page_config(
 # -------------------------------
 # SAMPLE DATASET (for demonstration)
 # -------------------------------
-# This is minimal; in practice, replace with larger dataset
 data = pd.DataFrame({
     "text": [
         "BREAKING!!! Government hides shocking truth about vaccines!",
@@ -68,8 +61,8 @@ st.markdown(
     """
 This system uses **machine learning models** (Naive Bayes and Logistic Regression) 
 to predict whether a news headline or article is **real or fake**.
-- Enter a headline or paste a website URL to analyze.
-- The system fetches the text (if URL) and predicts using both models.
+- Enter a headline or article text to analyze.
+- The system predicts using both models.
 - A sample fake news headline is included for testing.
 """
 )
@@ -77,22 +70,8 @@ to predict whether a news headline or article is **real or fake**.
 # -------------------------------
 # INPUT SECTION
 # -------------------------------
-st.markdown("## Enter Headline or URL")
-input_type = st.radio("Select input type:", ["Text", "URL"])
-
-user_input = ""
-if input_type == "Text":
-    user_input = st.text_area("Enter the news headline or article text:", height=150)
-elif input_type == "URL":
-    url = st.text_input("Enter the website URL:")
-    if url:
-        try:
-            response = requests.get(url, timeout=5)
-            soup = BeautifulSoup(response.content, "lxml")
-            paragraphs = soup.find_all("p")
-            user_input = " ".join([p.get_text() for p in paragraphs])
-        except Exception as e:
-            st.error(f"⚠️ Failed to fetch URL content: {e}")
+st.markdown("## Enter News Headline or Text")
+user_input = st.text_area("Enter the news text here:", height=150)
 
 # -------------------------------
 # SAMPLE HEADLINE
@@ -141,6 +120,5 @@ st.markdown(
     """
 - This system is a **demo** and uses a minimal dataset.
 - For real-world use, train the models on a large, diverse dataset.
-- URL fetching only extracts `<p>` text; some websites may not work properly.
 """
 )
