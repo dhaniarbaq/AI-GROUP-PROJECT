@@ -11,153 +11,168 @@ from sklearn.linear_model import LogisticRegression
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer
 
-# Ensure NLP assets are available
+# ===============================
+# 1. INITIALIZATION & NLP SETUP
+# ===============================
 @st.cache_resource
-def download_nltk_data():
+def initialize_nlp():
+    # Downloads necessary data for the server
     nltk.download('stopwords')
     nltk.download('wordnet')
     nltk.download('omw-1.4')
+    nltk.download('punkt')
+    return WordNetLemmatizer(), set(stopwords.words('english'))
 
-download_nltk_data()
+lemmatizer, stop_words = initialize_nlp()
 
-# ===============================
-# SYSTEM CONFIG & UI THEME
-# ===============================
-st.set_page_config(page_title="Forensic AI Info-Verif", page_icon="🕵️", layout="wide")
-
+# Custom CSS for Professional UI
 st.markdown("""
 <style>
-    .reportview-container { background: #0f172a; color: white; }
-    .stMetric { background: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
-    .verdict-box { padding: 20px; border-radius: 15px; text-align: center; font-size: 1.5rem; font-weight: bold; }
+    .main-header { font-size: 2.5rem; color: #1E293B; font-weight: 800; text-align: center; margin-bottom: 10px; }
+    .stAlert { border-radius: 12px; }
+    .card { background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border: 1px solid #E2E8F0; color: #1E293B; }
+    .verdict-high { background-color: #FEE2E2; color: #991B1B; border: 2px solid #EF4444; padding: 20px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 1.2rem; }
+    .verdict-low { background-color: #D1FAE5; color: #065F46; border: 2px solid #10B981; padding: 20px; border-radius: 12px; text-align: center; font-weight: bold; font-size: 1.2rem; }
 </style>
 """, unsafe_allow_html=True)
 
-# -------------------------------
-# CORE NLP & ML ENGINE
-# -------------------------------
-class ComplexVerificationSystem:
-    def __init__(self):
-        self.lemmatizer = WordNetLemmatizer()
-        self.stop_words = set(stopwords.words('english'))
-        self.tfidf = TfidfVectorizer(max_features=5000, ngram_range=(1, 3))
-        
-        # Expanded Synthetic Training Set
-        self.corpus = [
-            ("SHOCKING! New law allows government to take your home tomorrow!", 1),
-            ("Consumer Price Index rose by 0.2% according to Labor Statistics.", 0),
-            ("CURE FOR DIABETES FOUND! Big Pharma doesn't want you to know!!", 1),
-            ("Global stock markets stabilized after central bank policy announcement.", 0),
-            ("URGENT: Drinking lemon water cures viral infections instantly!", 1),
-            ("The city council approved the new public transit expansion plan.", 0),
-            ("LEAKED: Famous celebrity caught in secret underground cult meeting.", 1),
-            ("NASA launches new satellite to monitor arctic ice shelf melting.", 0)
-        ]
-        self._prepare_models()
+# ===============================
+# 2. SYSTEM OVERVIEW
+# ===============================
+st.markdown('<div class="main-header">🔍 AI Forensic Information Verifier</div>', unsafe_allow_html=True)
 
-    def clean_text(self, text):
+with st.expander("📖 System Overview & Methodology", expanded=True):
+    st.write("""
+    This advanced system uses a **Hybrid AI Ensemble** to detect disinformation. 
+    1. **Text Pre-processing**: Input is cleaned, tokenized, and lemmatized to its root form.
+    2. **TF-IDF Vectorization**: Words are converted into numerical importance scores.
+    3. **Machine Learning Models**: 
+        - **Naive Bayes**: Uses probability to find 'spammy' word associations.
+        - **Logistic Regression**: Analyzes the structural relationship between words.
+    """)
+    st.info("**Example of Fake News (for testing):** 'SHOCKING: The government is hiding a secret alien base under the city and plans to seize all bank accounts tomorrow!!'")
+
+# ===============================
+# 3. CORE ANALYTICS ENGINE
+# ===============================
+class ForensicEngine:
+    def __init__(self):
+        # Sample Training Data (Representative of real-world patterns)
+        self.train_data = [
+            ("The central bank raised interest rates by 25 basis points.", 0),
+            ("SHOCKING: Miracle water cures cancer in 2 hours! Doctors are FURIOUS!", 1),
+            ("New studies show coffee improves heart health in older adults.", 0),
+            ("BREAKING: Alien invasion starting in New York, police are fleeing!", 1),
+            ("The local mayor announced a new budget for public parks today.", 0),
+            ("URGENT: Your bank account will be deleted unless you click here now!", 1),
+            ("NASA launched a satellite to study the atmospheric changes in Mars.", 0),
+            ("LEAKED: Secret document proves the moon is actually a hollow base.", 1)
+        ]
+        self.vectorizer = TfidfVectorizer(ngram_range=(1, 2))
+        self.nb_model = MultinomialNB()
+        self.lr_model = LogisticRegression()
+        self._train()
+
+    def _clean(self, text):
         text = re.sub(r'[^a-zA-Z\s]', '', text.lower())
-        tokens = text.split()
-        tokens = [self.lemmatizer.lemmatize(w) for w in tokens if w not in self.stop_words]
+        tokens = [lemmatizer.lemmatize(w) for w in text.split() if w not in stop_words]
         return " ".join(tokens)
 
-    def _prepare_models(self):
-        texts = [self.clean_text(t[0]) for t in self.corpus]
-        labels = [t[1] for t in self.corpus]
-        X = self.tfidf.fit_transform(texts)
-        self.nb = MultinomialNB().fit(X, labels)
-        self.lr = LogisticRegression().fit(X, labels)
+    def _train(self):
+        texts = [self._clean(t[0]) for t in self.train_data]
+        labels = [t[1] for t in self.train_data]
+        X = self.vectorizer.fit_transform(texts)
+        self.nb_model.fit(X, labels)
+        self.lr_model.fit(X, labels)
 
-    def analyze_deep(self, text):
-        cleaned = self.clean_text(text)
-        vec = self.tfidf.transform([cleaned])
+    def predict(self, text):
+        cleaned = self._clean(text)
+        vec = self.vectorizer.transform([cleaned])
+        nb_score = self.nb_model.predict_proba(vec)[0][1]
+        lr_score = self.lr_model.predict_proba(vec)[0][1]
         
-        nb_prob = self.nb.predict_proba(vec)[0][1]
-        lr_prob = self.lr.predict_proba(vec)[0][1]
+        # Meta-analysis (all caps and punctuation)
+        cap_ratio = sum(1 for c in text if c.isupper()) / len(text) if len(text) > 0 else 0
+        punc_score = (text.count('!') + text.count('?')) / 10
         
-        # Forensic Heuristics
-        all_caps = len(re.findall(r'\b[A-Z]{3,}\b', text))
-        exclams = text.count('!')
-        lexical_diversity = len(set(text.split())) / len(text.split()) if len(text.split()) > 0 else 0
+        combined = (nb_score * 0.4) + (lr_score * 0.4) + (min(1.0, cap_ratio + punc_score) * 0.2)
+        return nb_score, lr_score, combined
+
+# Init Engine
+engine = ForensicEngine()
+
+# ===============================
+# 4. USER INTERFACE & INPUT
+# ===============================
+col1, col2 = st.columns([2, 1])
+
+with col1:
+    st.subheader("🖋️ Input Terminal")
+    input_type = st.segmented_control("Selection Mode", ["Text/Headline", "Website Link"])
+    
+    if input_type == "Website Link":
+        user_input = st.text_input("Enter Website URL:", placeholder="https://news-portal.com/article-123")
+        # Simulate scraping by extracting keywords from the URL
+        if user_input:
+            processed_input = user_input.split('/')[-1].replace('-', ' ')
+        else: processed_input = ""
+    else:
+        user_input = st.text_area("Enter News Headline or Content:", height=150, placeholder="Paste here...")
+        processed_input = user_input
+
+    analyze_btn = st.button("🚀 EXECUTE FORENSIC SCAN", use_container_width=True)
+
+with col2:
+    st.subheader("📊 Live Metrics")
+    if analyze_btn and processed_input:
+        nb, lr, combined = engine.predict(processed_input)
         
-        return {
-            "nb_risk": nb_prob,
-            "lr_risk": lr_prob,
-            "heuristic_risk": min(1.0, (all_caps * 0.15) + (exclams * 0.1)),
-            "lexical_score": lexical_diversity,
-            "final_consensus": (nb_prob * 0.4) + (lr_prob * 0.4) + (min(1.0, (all_caps * 0.15)) * 0.2)
-        }
-
-# Initialize System
-if 'ai_system' not in st.session_state:
-    st.session_state.ai_system = ComplexVerificationSystem()
-
-# -------------------------------
-# MAIN DASHBOARD UI
-# -------------------------------
-st.title("🕵️ Forensic AI Disinformation Analysis Suite")
-st.markdown("---")
-
-# System Overview Section
-with st.container():
-    col_a, col_b = st.columns([1, 1])
-    with col_a:
-        st.subheader("🛠️ System Overview")
-        st.write("""
-        This suite employs a **Multi-Model Ensemble Pipeline**. It converts raw text into 
-        **TF-IDF Vectors** (N-gram range 1-3) and processes them through two distinct 
-        mathematical frameworks.
-        """)
-    with col_b:
-        st.info("**Example Fake News:** 'BREAKING: Scientists discover moon is made of blue cheese, government hides the truth!'")
-
-# Input Workspace
-st.subheader("📥 Analysis Workspace")
-user_input = st.text_area("Enter Headline or Website Content for Forensic Scan:", height=150)
-
-if st.button("🚀 INITIATE DEEP SCAN", use_container_width=True):
-    if user_input:
-        results = st.session_state.ai_system.analyze_deep(user_input)
-        
-        # 📊 Visualization Row
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.metric("Naive Bayes Risk", f"{results['nb_risk']:.1%}")
-        with col2:
-            st.metric("Logistic Reg. Risk", f"{results['lr_risk']:.1%}")
-        with col3:
-            st.metric("Linguistic Risk", f"{results['heuristic_risk']:.1%}")
-
-        # Consensus Gauge Chart
+        # Risk Gauge
         fig = go.Figure(go.Indicator(
             mode = "gauge+number",
-            value = results['final_consensus'] * 100,
-            title = {'text': "Aggregate Forensic Risk Score"},
+            value = combined * 100,
+            domain = {'x': [0, 1], 'y': [0, 1]},
+            title = {'text': "Aggregate Risk %"},
             gauge = {
                 'axis': {'range': [0, 100]},
-                'bar': {'color': "#3b82f6"},
+                'bar': {'color': "#1E293B"},
                 'steps': [
-                    {'range': [0, 40], 'color': "#10b981"},
-                    {'range': [40, 70], 'color': "#f59e0b"},
-                    {'range': [70, 100], 'color': "#ef4444"}]
+                    {'range': [0, 40], 'color': "#10B981"},
+                    {'range': [40, 70], 'color': "#F59E0B"},
+                    {'range': [70, 100], 'color': "#EF4444"}]
             }
         ))
+        fig.update_layout(height=250, margin=dict(l=20, r=20, t=50, b=20))
         st.plotly_chart(fig, use_container_width=True)
-
-        # Final Forensic Verdict
-        st.divider()
-        if results['final_consensus'] > 0.7:
-            st.markdown('<div class="verdict-box" style="background:#450a0a; color:#f87171; border:2px solid #f87171;">🚩 FORENSIC VERDICT: HIGH RISK DISINFORMATION</div>', unsafe_allow_html=True)
-            st.write("**Observations:** Detected high frequency of sensationalist linguistic patterns and statistical word-weights common in propaganda.")
-        elif results['final_consensus'] > 0.4:
-            st.markdown('<div class="verdict-box" style="background:#451a03; color:#fbbf24; border:2px solid #fbbf24;">⚠️ FORENSIC VERDICT: UNVERIFIED / SENSATIONALIST</div>', unsafe_allow_html=True)
-            st.write("**Observations:** Content shows mixed signals. Lexical diversity is moderate, but emotional triggers are present.")
-        else:
-            st.markdown('<div class="verdict-box" style="background:#064e3b; color:#34d399; border:2px solid #34d399;">✅ FORENSIC VERDICT: LIKELY CREDIBLE</div>', unsafe_allow_html=True)
-            st.write("**Observations:** Linguistic structure aligns with factual reporting standards.")
-
     else:
-        st.error("Input required for analysis.")
+        st.info("Awaiting input for real-time analysis.")
 
-st.markdown("---")
-st.caption("AI Ethics Note: This system uses statistical probability and heuristics. It should supplement, not replace, human fact-checking.")
+# ===============================
+# 5. RESULTS DISPLAY
+# ===============================
+if analyze_btn and processed_input:
+    st.divider()
+    res1, res2, res3 = st.columns(3)
+    
+    res1.metric("Naive Bayes Score", f"{nb:.1%}")
+    res2.metric("Logistic Regression", f"{lr:.1%}")
+    res3.metric("Pattern Confidence", "High" if combined > 0.7 or combined < 0.3 else "Medium")
+    
+    st.markdown("### 📋 Forensic Verdict")
+    if combined > 0.65:
+        st.markdown(f'<div class="verdict-high">🚩 HIGH RISK: Potential Disinformation Detected</div>', unsafe_allow_html=True)
+        st.write("The AI ensemble has identified linguistic markers (Sensationalism, specific word-weights) typically found in unverified news sources.")
+    elif combined > 0.35:
+        st.warning("⚠️ MIXED SIGNALS: The system is uncertain. This text contains some objective language but exhibits sensationalist traits.")
+    else:
+        st.markdown(f'<div class="verdict-low">✅ LOW RISK: Likely Credible Information</div>', unsafe_allow_html=True)
+        st.write("Linguistic analysis shows patterns consistent with factual reporting and standard journalistic ethics.")
+
+elif analyze_btn:
+    st.error("Please enter text or a link to proceed.")
+
+st.sidebar.markdown("### 🛠️ Quick Sandbox")
+if st.sidebar.button("Load Fake News Sample"):
+    st.info("Copy this: 'BREAKING: Drinking bleach cures every disease known to man, scientists are shocked!'")
+if st.sidebar.button("Load Real News Sample"):
+    st.info("Copy this: 'The European Union announced new regulations regarding data privacy for tech companies today.'")
