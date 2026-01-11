@@ -1,124 +1,128 @@
-# ===============================
-# FAKE NEWS DETECTION SYSTEM
-# AI-Based News Verification
-# ===============================
-
 import streamlit as st
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
-from sklearn.pipeline import Pipeline
-import time
+from sklearn.metrics import accuracy_score
+import joblib
+import requests
+import re
 
-# -------------------------------
-# APP CONFIGURATION
-# -------------------------------
-st.set_page_config(
-    page_title="AI Fake News Detector",
-    page_icon="📰",
-    layout="wide"
-)
+# --------------------------
+# Load and prepare dataset
+# --------------------------
+@st.cache_data
+def load_data():
+    # Example dataset (can replace with larger dataset later)
+    data = {
+        "text": [
+            "Breaking: Alien spaceship lands in New York City!",
+            "The government will provide free education to all citizens",
+            "Scientists discovered a cure for common cold",
+            "Celebrity dies in suspicious accident",
+            "Study shows that eating chocolate improves intelligence"
+        ],
+        "label": [1, 0, 0, 1, 1]  # 1 = Fake, 0 = Real
+    }
+    df = pd.DataFrame(data)
+    return df
 
-# -------------------------------
-# SAMPLE DATASET (for demonstration)
-# -------------------------------
-data = pd.DataFrame({
-    "text": [
-        "BREAKING!!! Government hides shocking truth about vaccines!",
-        "Study shows eating apples daily improves health.",
-        "Experts claim that aliens live among us.",
-        "Local school implements new reading program successfully."
-    ],
-    "label": ["fake", "real", "fake", "real"]
-})
+df = load_data()
 
-# -------------------------------
-# TRAIN SIMPLE MODELS
-# -------------------------------
-X_train, X_test, y_train, y_test = train_test_split(data["text"], data["label"], test_size=0.2, random_state=42)
+# --------------------------
+# Preprocessing and Model Training
+# --------------------------
+@st.cache_resource
+def train_models(df):
+    vectorizer = TfidfVectorizer(stop_words='english')
+    X = vectorizer.fit_transform(df['text'])
+    y = df['label']
 
-# Naive Bayes Pipeline
-nb_model = Pipeline([
-    ("tfidf", TfidfVectorizer()),
-    ("nb", MultinomialNB())
-])
-nb_model.fit(X_train, y_train)
+    # Split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Logistic Regression Pipeline
-lr_model = Pipeline([
-    ("tfidf", TfidfVectorizer()),
-    ("lr", LogisticRegression())
-])
-lr_model.fit(X_train, y_train)
+    # Naive Bayes
+    nb_model = MultinomialNB()
+    nb_model.fit(X_train, y_train)
 
-# -------------------------------
-# SYSTEM OVERVIEW
-# -------------------------------
-st.markdown("# 📰 AI Fake News Detection System")
-st.markdown(
-    """
-This system uses **machine learning models** (Naive Bayes and Logistic Regression) 
-to predict whether a news headline or article is **real or fake**.
-- Enter a headline or article text to analyze.
-- The system predicts using both models.
-- A sample fake news headline is included for testing.
-"""
-)
+    # Logistic Regression
+    lr_model = LogisticRegression()
+    lr_model.fit(X_train, y_train)
 
-# -------------------------------
-# INPUT SECTION
-# -------------------------------
-st.markdown("## Enter News Headline or Text")
-user_input = st.text_area("Enter the news text here:", height=150)
+    # Accuracy check
+    nb_acc = accuracy_score(y_test, nb_model.predict(X_test))
+    lr_acc = accuracy_score(y_test, lr_model.predict(X_test))
 
-# -------------------------------
-# SAMPLE HEADLINE
-# -------------------------------
-if st.button("Load Sample Fake News"):
-    user_input = "SHOCKING BREAKING NEWS!!! Government hides the real truth about vaccines!"
-    st.text_area("News text loaded:", user_input, height=150)
+    return vectorizer, nb_model, lr_model, nb_acc, lr_acc
 
-# -------------------------------
-# ANALYSIS
-# -------------------------------
-if st.button("Analyze News") and user_input.strip():
-    with st.spinner("Analyzing..."):
-        time.sleep(0.5)
+vectorizer, nb_model, lr_model, nb_acc, lr_acc = train_models(df)
 
-        nb_pred = nb_model.predict([user_input])[0]
-        nb_prob = nb_model.predict_proba([user_input])[0]
-        lr_pred = lr_model.predict([user_input])[0]
-        lr_prob = lr_model.predict_proba([user_input])[0]
+# --------------------------
+# Streamlit Layout
+# --------------------------
+st.set_page_config(page_title="Fake News Detection AI", layout="wide")
 
-        st.markdown("### 📊 Predictions")
-        col1, col2 = st.columns(2)
-        with col1:
-            st.markdown("**Naive Bayes Model**")
-            st.metric("Prediction", nb_pred.title())
-            st.progress(int(max(nb_prob) * 100))
-        with col2:
-            st.markdown("**Logistic Regression Model**")
-            st.metric("Prediction", lr_pred.title())
-            st.progress(int(max(lr_prob) * 100))
+st.title("📰 Fake News Detection System")
+st.markdown("""
+This system uses **AI models** to detect whether a news headline or article is fake or real.
+We use **Naive Bayes** and **Logistic Regression** models trained on example news data.
+""")
 
-        # Combined Result
-        final_result = "fake" if nb_pred=="fake" and lr_pred=="fake" else "real"
-        st.markdown("### 🏆 Final Assessment")
-        if final_result == "fake":
-            st.error("⚠️ The news is likely **FAKE**")
-        else:
-            st.success("✅ The news is likely **REAL**")
+# Sidebar for input
+st.sidebar.header("Input Options")
+input_choice = st.sidebar.radio("Choose input type:", ["Type Headline", "Enter Website Link"])
 
-# -------------------------------
-# ADDITIONAL INFO
-# -------------------------------
+# --------------------------
+# Process User Input
+# --------------------------
+user_input = ""
+if input_choice == "Type Headline":
+    user_input = st.text_area("Enter the news headline:")
+elif input_choice == "Enter Website Link":
+    url = st.text_input("Enter website link:")
+    if url:
+        try:
+            response = requests.get(url)
+            text_content = re.sub(r'<[^>]+>', '', response.text)  # strip HTML tags
+            user_input = ' '.join(text_content.split()[:50])  # Take first 50 words
+        except:
+            st.error("Unable to fetch the website content.")
+
+# --------------------------
+# Prediction
+# --------------------------
+if st.button("Check News"):
+    if user_input:
+        X_input = vectorizer.transform([user_input])
+        nb_pred = nb_model.predict(X_input)[0]
+        lr_pred = lr_model.predict(X_input)[0]
+
+        st.markdown("### Results")
+        st.write(f"**Naive Bayes Prediction:** {'Fake' if nb_pred == 1 else 'Real'}")
+        st.write(f"**Logistic Regression Prediction:** {'Fake' if lr_pred == 1 else 'Real'}")
+        st.write(f"**Naive Bayes Model Accuracy (example dataset):** {nb_acc*100:.2f}%")
+        st.write(f"**Logistic Regression Model Accuracy (example dataset):** {lr_acc*100:.2f}%")
+    else:
+        st.warning("Please enter a headline or provide a website link!")
+
+# --------------------------
+# Example Fake News
+# --------------------------
 st.markdown("---")
-st.markdown("### ℹ️ Note")
-st.markdown(
-    """
-- This system is a **demo** and uses a minimal dataset.
-- For real-world use, train the models on a large, diverse dataset.
-"""
-)
+st.subheader("💡 Example Fake News:")
+st.info("Breaking: Alien spaceship lands in New York City!")
+st.markdown("Try typing this headline above to see how the system predicts it.")
+
+# --------------------------
+# System Overview
+# --------------------------
+st.markdown("---")
+st.subheader("🔍 System Overview")
+st.markdown("""
+1. **Input**: Users can type a news headline or provide a website link.
+2. **Processing**: The system cleans and vectorizes the text using TF-IDF.
+3. **AI Models**: Naive Bayes and Logistic Regression models classify the text as Fake or Real.
+4. **Output**: Predictions are shown along with example model accuracy.
+""")
