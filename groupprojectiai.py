@@ -14,7 +14,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# ---------------- SAMPLE TRAINING DATA ----------------
+# ---------------- TRAINING DATA ----------------
 data = {
     "text": [
         "Breaking news miracle cure discovered overnight",
@@ -31,23 +31,34 @@ data = {
 
 df = pd.DataFrame(data)
 
-# ---------------- NLP PIPELINE ----------------
-model = Pipeline([
-    ("tfidf", TfidfVectorizer(
-        lowercase=True,
-        stop_words="english",
-        ngram_range=(1, 2)
-    )),
-    ("classifier", LogisticRegression(max_iter=1000))
-])
+# ---------------- MODEL TRAINING ----------------
+@st.cache_resource
+def train_model(dataframe):
+    model = Pipeline([
+        ("tfidf", TfidfVectorizer(
+            lowercase=True,
+            stop_words="english",
+            ngram_range=(1, 2),
+            min_df=1,
+            max_df=0.9
+        )),
+        ("classifier", LogisticRegression(
+            max_iter=2000,
+            class_weight="balanced"
+        ))
+    ])
 
-X_train, X_test, y_train, y_test = train_test_split(
-    df["text"], df["label"],
-    test_size=0.2,
-    random_state=42
-)
+    X_train, X_test, y_train, y_test = train_test_split(
+        dataframe["text"],
+        dataframe["label"],
+        test_size=0.2,
+        random_state=42
+    )
 
-model.fit(X_train, y_train)
+    model.fit(X_train, y_train)
+    return model
+
+model = train_model(df)
 
 # ---------------- SESSION STATE ----------------
 if "history" not in st.session_state:
@@ -56,28 +67,32 @@ if "history" not in st.session_state:
 # ---------------- SIDEBAR ----------------
 st.sidebar.title("📰 Fake News Detection System")
 st.sidebar.subheader("System Overview")
-st.sidebar.write("Natural Language Processing based classification")
+st.sidebar.write("NLP based text classification")
 st.sidebar.text("Model: TF-IDF + Logistic Regression")
-st.sidebar.text("Output: Probabilistic Prediction")
+st.sidebar.text("Prediction Type: Probabilistic")
+st.sidebar.success("System Status: Operational")
+st.sidebar.caption("Version 1.0 | 2026")
 
 # ---------------- TABS ----------------
-tabs = ["Home", "Analyzer", "Dashboard", "Reports"]
-tab_home, tab_analyzer, tab_dashboard, tab_reports = st.tabs(tabs)
+tab_home, tab_analyzer, tab_dashboard, tab_reports = st.tabs(
+    ["Home", "Analyzer", "Dashboard", "Reports"]
+)
 
 # ---------------- HOME ----------------
 with tab_home:
     st.header("Welcome")
-    st.write("""
-    This system detects **potential fake news** using Natural Language Processing
-    and Machine Learning techniques.
+    st.write(
+        """
+        This system detects **potential fake news** using
+        Natural Language Processing and Machine Learning.
 
-    The model learns linguistic patterns from text data and produces
-    probability based predictions.
-    """)
+        The model analyzes linguistic patterns and produces
+        confidence based predictions.
+        """
+    )
 
     st.info(
-        "This application provides an early warning indicator. "
-        "It does not verify factual accuracy."
+        "This system provides an early warning indicator and does not perform factual verification."
     )
 
 # ---------------- ANALYZER ----------------
@@ -90,55 +105,57 @@ with tab_analyzer:
     )
 
     if st.button("🔍 Analyze News"):
-        if text_input.strip() == "":
+        if not text_input.strip():
             st.warning("Please enter text before analysis.")
         else:
             prediction = model.predict([text_input])[0]
-            probability = model.predict_proba([text_input])[0][prediction]
+            proba_fake, proba_genuine = model.predict_proba([text_input])[0]
 
             label = "Likely Fake News" if prediction == 1 else "Likely Genuine News"
+            confidence = max(proba_fake, proba_genuine)
 
-            st.subheader("Result")
-            st.write(f"**Prediction:** {label}")
-            st.progress(probability)
-            st.write(f"**Confidence:** {probability * 100:.2f}%")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.metric("Prediction", label)
+            with col2:
+                st.metric("Confidence", f"{confidence * 100:.2f}%")
 
-            # ---------------- Explanation ----------------
-            if prediction == 1:
-                explanation = (
-                    "The text is classified as Likely Fake News because the NLP model "
-                    "identified linguistic patterns commonly associated with misleading "
-                    "or sensational reporting. TF-IDF weighting emphasized terms that "
-                    "frequently appear in deceptive content."
-                )
-            else:
-                explanation = (
-                    "The text is classified as Likely Genuine News because the language "
-                    "structure and vocabulary align with factual reporting styles. "
-                    "The model detected neutral and informative linguistic features."
-                )
+            st.progress(confidence)
 
-            confidence_explanation = (
-                f"The confidence value of {probability * 100:.2f}% represents the "
-                "model’s certainty based on TF-IDF feature weighting and the learned "
-                "decision boundary of the Logistic Regression classifier."
-            )
+            # ---------------- EXPLAINABILITY ----------------
+            tfidf = model.named_steps["tfidf"]
+            classifier = model.named_steps["classifier"]
+
+            feature_names = tfidf.get_feature_names_out()
+            coefficients = classifier.coef_[0]
+
+            top_features = sorted(
+                zip(feature_names, coefficients),
+                key=lambda x: abs(x[1]),
+                reverse=True
+            )[:5]
+
+            keywords = ", ".join([word for word, _ in top_features])
 
             st.markdown("### 🔍 Justification of Result")
-            st.write(explanation)
-            st.write(confidence_explanation)
-
-            st.caption(
-                "This prediction is generated using NLP and Machine Learning. "
-                "It is a probabilistic assessment, not factual verification."
+            st.write(
+                f"The prediction was influenced by high impact textual features such as: {keywords}."
+            )
+            st.write(
+                f"The confidence score of {confidence * 100:.2f}% reflects the model’s certainty "
+                "based on TF-IDF feature weighting and the learned Logistic Regression decision boundary."
             )
 
-            # ---------------- Save to History ----------------
+            st.caption(
+                "This output represents a probabilistic assessment generated by an NLP model."
+            )
+
+            # ---------------- SAVE HISTORY ----------------
             st.session_state.history.append({
                 "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "Text": text_input[:80] + "...",
                 "Prediction": label,
-                "Confidence (%)": round(probability * 100, 2)
+                "Confidence (%)": round(confidence * 100, 2)
             })
 
 # ---------------- DASHBOARD ----------------
@@ -147,14 +164,20 @@ with tab_dashboard:
 
     if st.session_state.history:
         hist_df = pd.DataFrame(st.session_state.history)
+        hist_df["Time"] = pd.to_datetime(hist_df["Time"])
 
         st.subheader("Prediction Distribution")
         st.bar_chart(hist_df["Prediction"].value_counts())
 
-        st.subheader("Model Confidence Overview")
+        st.subheader("Average Confidence Level")
         st.metric(
-            "Average Confidence Score",
+            "Mean Confidence",
             f"{hist_df['Confidence (%)'].mean():.2f}%"
+        )
+
+        st.subheader("Confidence Trend Over Time")
+        st.line_chart(
+            hist_df.set_index("Time")["Confidence (%)"]
         )
     else:
         st.info("No analysis data available yet.")
@@ -165,7 +188,7 @@ with tab_reports:
 
     if st.session_state.history:
         report_df = pd.DataFrame(st.session_state.history)
-        st.dataframe(report_df)
+        st.dataframe(report_df, use_container_width=True)
 
         csv = report_df.to_csv(index=False).encode("utf-8")
         st.download_button(
