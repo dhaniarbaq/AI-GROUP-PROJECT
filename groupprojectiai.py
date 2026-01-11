@@ -1,173 +1,137 @@
-# ===============================
-# FAKE NEWS DETECTION SYSTEM
-# AI-Powered Verification Platform
-# ===============================
-
 import streamlit as st
 import pandas as pd
-import numpy as np
-import re
-import random
-import time
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.naive_bayes import MultinomialNB
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from urllib.request import urlopen
-from bs4 import BeautifulSoup
+import joblib
 
-# -------------------------------
-# APP CONFIG
-# -------------------------------
-st.set_page_config(
-    page_title="Fake News Detection",
-    page_icon="📰",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+st.set_page_config(page_title="Student Data Dashboard", layout="wide")
 
-st.markdown("""
-<style>
-.main-title {
-    font-size: 2.8rem;
-    color: #1E3A8A;
-    font-weight: 800;
-    text-align: center;
-    margin-bottom: 1rem;
-}
-.stButton>button {
-    background: linear-gradient(135deg,#1E40AF,#3B82F6);
-    color: white;
-    font-weight: 600;
-    border-radius: 8px;
-}
-.stButton>button:hover {
-    transform: translateY(-2px);
-}
-</style>
-""", unsafe_allow_html=True)
+# ------------------- Load Data -------------------
+@st.cache_data
+def load_data(file=None):
+    if file:
+        df = pd.read_csv(file)
+    else:
+        df = pd.read_csv("student_data.csv")
+    return df
 
-st.markdown('<div class="main-title">📰 FAKE NEWS DETECTION SYSTEM</div>', unsafe_allow_html=True)
+uploaded_file = st.sidebar.file_uploader("Upload CSV", type=["csv"])
+data = load_data(uploaded_file)
 
-# -------------------------------
-# SYSTEM OVERVIEW
-# -------------------------------
-st.markdown("""
-### System Overview
-This platform uses **AI models (Naive Bayes & Logistic Regression)** to detect fake news.
-Users can either:
-1. Type a headline or article text.
-2. Provide a website link.
+# ------------------- Tabs -------------------
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    "Dashboard", "Data Table", "Visualization", "Prediction", "Insights", "ML Model"
+])
 
-The system processes the text, evaluates its authenticity, and outputs whether it is likely **REAL** or **FAKE**.  
-
-Key Features:
-- NLP preprocessing (TF-IDF)
-- ML prediction with NB & Logistic Regression
-- Sample fake news for testing
-- Interactive, user-friendly interface
-""")
-
-# -------------------------------
-# SAMPLE DATASET
-# -------------------------------
-# Minimal example for demonstration
-data = {
-    'text': [
-        "BREAKING: Scientists discovered a miracle cure for cancer overnight!",
-        "The government announced new policies for economic growth.",
-        "Celebrity endorses secret method to become rich in 7 days!",
-        "Local school wins award for sustainable environment program."
-    ],
-    'label': [1, 0, 1, 0]  # 1 = Fake, 0 = Real
-}
-
-df = pd.DataFrame(data)
-
-# -------------------------------
-# MODEL TRAINING
-# -------------------------------
-vectorizer = TfidfVectorizer(stop_words='english')
-X = vectorizer.fit_transform(df['text'])
-y = df['label']
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42)
-
-# Naive Bayes
-nb_model = MultinomialNB()
-nb_model.fit(X_train, y_train)
-
-# Logistic Regression
-lr_model = LogisticRegression(max_iter=500)
-lr_model.fit(X_train, y_train)
-
-# -------------------------------
-# USER INPUT
-# -------------------------------
-tab1, tab2 = st.tabs(["📝 Text Input", "🌐 URL Input"])
-
+# ------------------- Dashboard -------------------
 with tab1:
-    user_text = st.text_area("Enter headline or article text:", height=150, placeholder="Type or paste text here...")
-    if st.button("Analyze Text"):
-        if user_text.strip() == "":
-            st.error("Please enter some text to analyze.")
-        else:
-            # Preprocess
-            text_vector = vectorizer.transform([user_text])
-            nb_pred = nb_model.predict(text_vector)[0]
-            lr_pred = lr_model.predict(text_vector)[0]
+    st.title("📊 Student Data Dashboard")
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Average Study Hours", round(data["StudyHours"].mean(), 2))
+    col2.metric("Avg Social Media Hours", round(data["SocialMediaHours"].mean(), 2))
+    col3.metric("Students Using Transport", f"{(data['Transport'] == 'Yes').mean()*100:.2f}%")
+    
+    st.subheader("Gender Distribution")
+    st.bar_chart(data['Gender'].value_counts())
 
-            st.markdown("### 🔍 Analysis Results")
-            st.markdown(f"**Naive Bayes Prediction:** {'FAKE' if nb_pred else 'REAL'}")
-            st.markdown(f"**Logistic Regression Prediction:** {'FAKE' if lr_pred else 'REAL'}")
+    st.subheader("Program Distribution")
+    st.bar_chart(data['Program'].value_counts())
 
-            confidence_nb = nb_model.predict_proba(text_vector)[0][nb_pred]
-            confidence_lr = lr_model.predict_proba(text_vector)[0][lr_pred]
-
-            st.markdown(f"**Naive Bayes Confidence:** {confidence_nb:.1%}")
-            st.markdown(f"**Logistic Regression Confidence:** {confidence_lr:.1%}")
-
+# ------------------- Data Table -------------------
 with tab2:
-    user_url = st.text_input("Enter website URL to analyze:")
-    if st.button("Analyze URL"):
-        if user_url.strip() == "":
-            st.error("Please enter a URL.")
-        else:
-            try:
-                page = urlopen(user_url)
-                soup = BeautifulSoup(page, 'html.parser')
-                text = ' '.join([p.get_text() for p in soup.find_all('p')])
-                if len(text.strip()) == 0:
-                    st.warning("No textual content detected on this page.")
-                else:
-                    text_vector = vectorizer.transform([text])
-                    nb_pred = nb_model.predict(text_vector)[0]
-                    lr_pred = lr_model.predict(text_vector)[0]
+    st.title("📋 Data Table / Exploration")
+    selected_columns = st.multiselect("Select columns", data.columns.tolist(), default=data.columns.tolist())
+    filtered_data = data[selected_columns]
+    
+    st.dataframe(filtered_data, use_container_width=True)
+    
+    st.download_button(
+        "Download Filtered CSV",
+        filtered_data.to_csv(index=False),
+        "filtered_student_data.csv"
+    )
 
-                    st.markdown("### 🔍 Analysis Results")
-                    st.markdown(f"**Naive Bayes Prediction:** {'FAKE' if nb_pred else 'REAL'}")
-                    st.markdown(f"**Logistic Regression Prediction:** {'FAKE' if lr_pred else 'REAL'}")
+# ------------------- Visualization -------------------
+with tab3:
+    st.title("📈 Data Visualization")
+    chart_type = st.selectbox("Select chart type", ["Bar", "Line", "Pie", "Scatter", "Histogram", "Boxplot", "Heatmap"])
+    
+    if chart_type in ["Bar", "Line", "Scatter"]:
+        x_col = st.selectbox("X-axis", data.columns)
+        y_col = st.selectbox("Y-axis", data.columns)
+    
+    if chart_type == "Bar":
+        st.bar_chart(data.groupby(x_col)[y_col].mean())
+    elif chart_type == "Line":
+        st.line_chart(data.groupby(x_col)[y_col].mean())
+    elif chart_type == "Pie":
+        st.pyplot(plt.pie(data[y_col].value_counts(), labels=data[y_col].value_counts().index, autopct="%1.1f%%"))
+    elif chart_type == "Scatter":
+        fig, ax = plt.subplots()
+        sns.scatterplot(x=data[x_col], y=data[y_col], hue=data.get("Gender", None), ax=ax)
+        st.pyplot(fig)
+    elif chart_type == "Histogram":
+        col = st.selectbox("Select Column", data.columns)
+        bins = st.slider("Number of Bins", 5, 50, 10)
+        fig, ax = plt.subplots()
+        sns.histplot(data[col], bins=bins, kde=True, ax=ax)
+        st.pyplot(fig)
+    elif chart_type == "Boxplot":
+        col = st.selectbox("Select Column", data.columns)
+        fig, ax = plt.subplots()
+        sns.boxplot(y=data[col], ax=ax)
+        st.pyplot(fig)
+    elif chart_type == "Heatmap":
+        st.subheader("Correlation Heatmap")
+        fig, ax = plt.subplots(figsize=(10,6))
+        sns.heatmap(data.corr(), annot=True, cmap="coolwarm", ax=ax)
+        st.pyplot(fig)
 
-                    confidence_nb = nb_model.predict_proba(text_vector)[0][nb_pred]
-                    confidence_lr = lr_model.predict_proba(text_vector)[0][lr_pred]
+# ------------------- Prediction -------------------
+with tab4:
+    st.title("🤖 Predict Study Efficiency")
+    age = st.number_input("Age", min_value=15, max_value=50, value=20)
+    study_hours = st.slider("Daily Study Hours", 0, 12, 3)
+    social_hours = st.slider("Social Media Hours", 0, 12, 2)
+    
+    # Dummy prediction formula
+    pred_score = 50 + study_hours*5 - social_hours*2 + (age-18)*1.5
+    if st.button("Predict"):
+        st.success(f"Predicted Study Efficiency Score: {pred_score:.2f}/100")
 
-                    st.markdown(f"**Naive Bayes Confidence:** {confidence_nb:.1%}")
-                    st.markdown(f"**Logistic Regression Confidence:** {confidence_lr:.1%}")
-            except Exception as e:
-                st.error(f"Error fetching URL: {e}")
+# ------------------- Insights -------------------
+with tab5:
+    st.title("💡 Insights & Recommendations")
+    st.write("- Study >5 hrs/day for better results")
+    st.write("- Limit social media usage <3 hrs/day")
+    st.write("- Consider university transport for time efficiency")
+    st.write("- Top performing programs: ", data.groupby("Program")["StudyHours"].mean().idxmax())
 
-# -------------------------------
-# SAMPLE FAKE NEWS
-# -------------------------------
-st.markdown("---")
-st.markdown("### 💡 Sample Fake News for Testing")
-sample_fake = random.choice(df[df['label']==1]['text'].tolist())
-st.info(sample_fake)
-st.caption("This example is marked as FAKE in the dataset.")
+# ------------------- ML Model -------------------
+with tab6:
+    st.title("⚡ ML Model Training")
+    target_col = st.selectbox("Select target column", data.columns)
+    feature_cols = st.multiselect("Select features", [col for col in data.columns if col != target_col])
 
-# -------------------------------
-# END OF SYSTEM
-# -------------------------------
-st.markdown("---")
-st.markdown("© 2026 AI News Lab")
+    if st.button("Train Model") and feature_cols:
+        X = data[feature_cols]
+        y = data[target_col]
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model.fit(X_train, y_train)
+        score = model.score(X_test, y_test)
+
+        st.success(f"Model trained! R² Score on Test Data: {score:.2f}")
+
+        # Feature importance
+        fi = pd.DataFrame({'Feature': feature_cols, 'Importance': model.feature_importances_}).sort_values(by="Importance", ascending=False)
+        st.subheader("Feature Importance")
+        st.bar_chart(fi.set_index("Feature"))
+
+        # Save model
+        joblib.dump(model, "rf_model.pkl")
+        st.write("Model saved as rf_model.pkl")
