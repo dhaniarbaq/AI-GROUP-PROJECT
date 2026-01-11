@@ -1,7 +1,6 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import re
 from datetime import datetime
 
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -10,9 +9,12 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Fake News Detection", layout="wide")
+st.set_page_config(
+    page_title="Fake News Detection System",
+    layout="wide"
+)
 
-# ---------------- SAMPLE DATASET ----------------
+# ---------------- SAMPLE TRAINING DATA ----------------
 data = {
     "text": [
         "Breaking news miracle cure discovered overnight",
@@ -20,9 +22,11 @@ data = {
         "Shocking secret revealed about vaccines",
         "The prime minister met foreign leaders yesterday",
         "Experts warn phones will explode tonight",
-        "Economic growth increased by three percent this year"
+        "Economic growth increased by three percent this year",
+        "Celebrity claims salt water cures all diseases",
+        "New tax regulation introduced for small businesses"
     ],
-    "label": [1, 0, 1, 0, 1, 0]  # 1 = Fake, 0 = Genuine
+    "label": [1, 0, 1, 0, 1, 0, 1, 0]  # 1 = Fake, 0 = Genuine
 }
 
 df = pd.DataFrame(data)
@@ -34,11 +38,13 @@ model = Pipeline([
         stop_words="english",
         ngram_range=(1, 2)
     )),
-    ("classifier", LogisticRegression())
+    ("classifier", LogisticRegression(max_iter=1000))
 ])
 
 X_train, X_test, y_train, y_test = train_test_split(
-    df["text"], df["label"], test_size=0.2, random_state=42
+    df["text"], df["label"],
+    test_size=0.2,
+    random_state=42
 )
 
 model.fit(X_train, y_train)
@@ -49,8 +55,10 @@ if "history" not in st.session_state:
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.title("📰 Fake News Detection System")
-st.sidebar.write("NLP based Machine Learning Model")
-st.sidebar.text("Method: TF-IDF + Logistic Regression")
+st.sidebar.subheader("System Overview")
+st.sidebar.write("Natural Language Processing based classification")
+st.sidebar.text("Model: TF-IDF + Logistic Regression")
+st.sidebar.text("Output: Probabilistic Prediction")
 
 # ---------------- TABS ----------------
 tabs = ["Home", "Analyzer", "Dashboard", "Reports"]
@@ -58,16 +66,19 @@ tab_home, tab_analyzer, tab_dashboard, tab_reports = st.tabs(tabs)
 
 # ---------------- HOME ----------------
 with tab_home:
-    st.header("Fake News Detection using NLP")
+    st.header("Welcome")
     st.write("""
-    This system applies **Natural Language Processing (NLP)** and
-    **Machine Learning** to identify potential fake news.
+    This system detects **potential fake news** using Natural Language Processing
+    and Machine Learning techniques.
 
-    The model learns linguistic patterns from text using TF-IDF
-    and predicts authenticity using Logistic Regression.
+    The model learns linguistic patterns from text data and produces
+    probability based predictions.
     """)
 
-    st.info("This tool provides probabilistic predictions, not factual verification.")
+    st.info(
+        "This application provides an early warning indicator. "
+        "It does not verify factual accuracy."
+    )
 
 # ---------------- ANALYZER ----------------
 with tab_analyzer:
@@ -80,7 +91,7 @@ with tab_analyzer:
 
     if st.button("🔍 Analyze News"):
         if text_input.strip() == "":
-            st.warning("Please enter text to analyze.")
+            st.warning("Please enter text before analysis.")
         else:
             prediction = model.predict([text_input])[0]
             probability = model.predict_proba([text_input])[0][prediction]
@@ -92,11 +103,40 @@ with tab_analyzer:
             st.progress(probability)
             st.write(f"**Confidence:** {probability * 100:.2f}%")
 
-            st.caption("Prediction based on learned linguistic patterns.")
+            # ---------------- Explanation ----------------
+            if prediction == 1:
+                explanation = (
+                    "The text is classified as Likely Fake News because the NLP model "
+                    "identified linguistic patterns commonly associated with misleading "
+                    "or sensational reporting. TF-IDF weighting emphasized terms that "
+                    "frequently appear in deceptive content."
+                )
+            else:
+                explanation = (
+                    "The text is classified as Likely Genuine News because the language "
+                    "structure and vocabulary align with factual reporting styles. "
+                    "The model detected neutral and informative linguistic features."
+                )
 
+            confidence_explanation = (
+                f"The confidence value of {probability * 100:.2f}% represents the "
+                "model’s certainty based on TF-IDF feature weighting and the learned "
+                "decision boundary of the Logistic Regression classifier."
+            )
+
+            st.markdown("### 🔍 Justification of Result")
+            st.write(explanation)
+            st.write(confidence_explanation)
+
+            st.caption(
+                "This prediction is generated using NLP and Machine Learning. "
+                "It is a probabilistic assessment, not factual verification."
+            )
+
+            # ---------------- Save to History ----------------
             st.session_state.history.append({
                 "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "Text": text_input[:70] + "...",
+                "Text": text_input[:80] + "...",
                 "Prediction": label,
                 "Confidence (%)": round(probability * 100, 2)
             })
@@ -106,12 +146,18 @@ with tab_dashboard:
     st.header("📊 Analysis Dashboard")
 
     if st.session_state.history:
-        df_hist = pd.DataFrame(st.session_state.history)
+        hist_df = pd.DataFrame(st.session_state.history)
 
-        st.bar_chart(df_hist["Prediction"].value_counts())
-        st.metric("Average Confidence", f"{df_hist['Confidence (%)'].mean():.2f}%")
+        st.subheader("Prediction Distribution")
+        st.bar_chart(hist_df["Prediction"].value_counts())
+
+        st.subheader("Model Confidence Overview")
+        st.metric(
+            "Average Confidence Score",
+            f"{hist_df['Confidence (%)'].mean():.2f}%"
+        )
     else:
-        st.info("No analysis data yet.")
+        st.info("No analysis data available yet.")
 
 # ---------------- REPORTS ----------------
 with tab_reports:
@@ -123,7 +169,7 @@ with tab_reports:
 
         csv = report_df.to_csv(index=False).encode("utf-8")
         st.download_button(
-            "Download CSV Report",
+            "⬇️ Download CSV Report",
             csv,
             "fake_news_report.csv",
             "text/csv"
