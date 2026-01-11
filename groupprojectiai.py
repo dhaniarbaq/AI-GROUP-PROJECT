@@ -8,136 +8,175 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report
 
 # ---------------- PAGE CONFIG ----------------
-st.set_page_config(page_title="Fake News Detection System", layout="wide")
+st.set_page_config(
+    page_title="Fake News Detection System",
+    layout="wide"
+)
 
-# ---------------- LOAD DATA ----------------
+# ---------------- LOAD DATASET ----------------
 @st.cache_data
 def load_data():
     df = pd.read_csv("FakeNewsNet.csv")
-    df = df.rename(columns={"title":"text", "real":"label"})
-    df = df.dropna(subset=["text","label","source_domain"])
+
+    # Rename for consistency
+    df = df.rename(columns={
+        "title": "text",
+        "real": "label"
+    })
+
+    # Drop missing values
+    df = df.dropna(subset=["text", "label", "source_domain"])
+
     return df
 
 df = load_data()
 
-# ---------------- MODEL ----------------
+# ---------------- MODEL TRAINING ----------------
 @st.cache_resource
-def train_model(data):
+def train_model(dataframe):
 
-    preprocessor = ColumnTransformer([
-        ("text", TfidfVectorizer(
-            stop_words="english",
-            ngram_range=(1,2),
-            min_df=5,
-            max_df=0.9
-        ), "text"),
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ("text", TfidfVectorizer(
+                lowercase=True,
+                stop_words="english",
+                ngram_range=(1,2),
+                min_df=5,
+                max_df=0.9,
+                sublinear_tf=True
+            ), "text"),
 
-        ("domain", TfidfVectorizer(), "source_domain")
-    ])
+            ("domain", TfidfVectorizer(), "source_domain")
+        ]
+    )
 
     model = Pipeline([
         ("features", preprocessor),
-        ("clf", LogisticRegression(
+        ("classifier", LogisticRegression(
             max_iter=4000,
             class_weight="balanced"
         ))
     ])
 
     X_train, X_test, y_train, y_test = train_test_split(
-        data[["text","source_domain"]],
-        data["label"],
+        dataframe[["text", "source_domain"]],
+        dataframe["label"],
         test_size=0.25,
         random_state=42,
-        stratify=data["label"]
+        stratify=dataframe["label"]
     )
 
     model.fit(X_train, y_train)
+
+    preds = model.predict(X_test)
+    print(classification_report(y_test, preds))
+
     return model
 
 model = train_model(df)
 
-# ---------------- CONFIDENCE INTERPRETATION ----------------
-def interpret_confidence(prob):
-    if prob > 0.85:
-        return "Very High"
-    elif prob > 0.70:
-        return "High"
-    elif prob > 0.55:
-        return "Moderate"
-    else:
-        return "Low"
+# ---------------- SESSION STATE ----------------
+if "history" not in st.session_state:
+    st.session_state.history = []
 
-# ---------------- STREAMLIT UI ----------------
-st.title("📰 Fake News Detection with Explainable AI")
+# ---------------- SIDEBAR ----------------
+st.sidebar.title("📰 Fake News Detection System")
+st.sidebar.subheader("System Overview")
+st.sidebar.write("NLP + Source Domain Classification")
+st.sidebar.text("Model: TF-IDF + Logistic Regression")
+st.sidebar.success("System Operational")
 
-headline = st.text_area("Enter news headline")
-domain = st.text_input("Enter source domain (e.g. bbc.com, cnn.com)")
+# ---------------- TABS ----------------
+tab_home, tab_analyzer, tab_dashboard, tab_reports = st.tabs(
+    ["Home", "Analyzer", "Dashboard", "Reports"]
+)
 
-if st.button("Analyze"):
+# ---------------- HOME ----------------
+with tab_home:
+    st.header("Welcome")
+    st.write("""
+    This system uses **23,000+ real news headlines** from FakeNewsNet.
+    It analyzes both **text content** and **news source domain**
+    to detect misinformation.
+    """)
+    st.info("This tool predicts likelihood — it does not fact-check.")
 
-    X = pd.DataFrame([{"text":headline, "source_domain":domain}])
-    proba = model.predict_proba(X)[0]
+# ---------------- ANALYZER ----------------
+with tab_analyzer:
+    st.header("🧠 News Analyzer")
 
-    # FakeNewsNet: 1 = Real, 0 = Fake
-    p_real = proba[1]
-    p_fake = proba[0]
+    text_input = st.text_area("Enter news headline", height=120)
+    domain_input = st.text_input("Enter source domain (e.g. cnn.com, bbc.com)")
 
-    if p_fake > 0.60:
-        label = "Fake News"
-        confidence = p_fake
-    else:
-        label = "Genuine News"
-        confidence = p_real
-
-    level = interpret_confidence(confidence)
-
-    # ---------------- RESULTS ----------------
-    st.subheader("Prediction Result")
-    st.metric("Classification", label)
-    st.metric("Confidence", f"{confidence*100:.2f}%")
-    st.progress(int(confidence*100))
-    st.write(f"Confidence Level: **{level}**")
-
-    # ---------------- EXPLANATION ----------------
-    tfidf_text = model.named_steps["features"].transformers_[0][1]
-    clf = model.named_steps["clf"]
-
-    feature_names = tfidf_text.get_feature_names_out()
-    coefs = clf.coef_[0][:len(feature_names)]
-
-    top_words = sorted(zip(feature_names, coefs), key=lambda x: abs(x[1]), reverse=True)[:6]
-
-    st.subheader("Why the model made this decision")
-
-    for word, weight in top_words:
-        if weight > 0:
-            st.write(f"• **'{word}'** pushes the model toward **Real News**")
+    if st.button("Analyze"):
+        if not text_input.strip() or not domain_input.strip():
+            st.warning("Please enter both headline and source domain.")
         else:
-            st.write(f"• **'{word}'** pushes the model toward **Fake News**")
+            X_input = pd.DataFrame([{
+                "text": text_input,
+                "source_domain": domain_input
+            }])
 
-    # ---------------- DOMAIN EFFECT ----------------
-    st.subheader("Source credibility analysis")
+            proba = model.predict_proba(X_input)[0]
 
-    domain_weight = model.named_steps["features"].transformers_[1][1]
-    if domain.lower() in domain_weight.get_feature_names_out():
-        st.write(f"The source **{domain}** has learned reliability patterns from historical data.")
+            # FakeNewsNet: 1 = Real, 0 = Fake
+            proba_real = proba[1]
+            proba_fake = proba[0]
+
+            threshold = 0.60
+
+            if proba_fake > threshold:
+                label = "Likely Fake News"
+                confidence = proba_fake
+            else:
+                label = "Likely Genuine News"
+                confidence = proba_real
+
+            col1, col2 = st.columns(2)
+            col1.metric("Prediction", label)
+            col2.metric("Confidence", f"{confidence*100:.2f}%")
+
+            st.progress(int(confidence * 100))
+
+            st.session_state.history.append({
+                "Time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "Headline": text_input[:50] + "...",
+                "Source": domain_input,
+                "Prediction": label,
+                "Confidence": round(confidence * 100, 2)
+            })
+
+# ---------------- DASHBOARD ----------------
+with tab_dashboard:
+    st.header("📊 Dashboard")
+
+    if st.session_state.history:
+        history_df = pd.DataFrame(st.session_state.history)
+        history_df["Time"] = pd.to_datetime(history_df["Time"])
+
+        st.subheader("Prediction Distribution")
+        st.bar_chart(history_df["Prediction"].value_counts())
+
+        st.subheader("Average Confidence")
+        st.metric("Mean", f"{history_df['Confidence'].mean():.2f}%")
+
+        st.subheader("Confidence Over Time")
+        st.line_chart(history_df.set_index("Time")["Confidence"])
     else:
-        st.write(f"The source **{domain}** is unknown, so the model relies more on wording.")
+        st.info("Run some analyses first.")
 
-    # ---------------- DECISION INTERPRETATION ----------------
-    st.subheader("Final Explanation")
+# ---------------- REPORTS ----------------
+with tab_reports:
+    st.header("📄 Reports")
 
-    if label == "Fake News":
-        st.write(
-            f"The system classified this as **Fake News** because the writing style and source resemble patterns "
-            f"found in known misinformation. With a confidence of **{confidence*100:.2f}%**, "
-            f"the prediction reliability is **{level}**."
-        )
+    if st.session_state.history:
+        reports_df = pd.DataFrame(st.session_state.history)
+        st.dataframe(reports_df, use_container_width=True)
+
+        csv = reports_df.to_csv(index=False).encode("utf-8")
+        st.download_button("Download CSV", csv, "fake_news_report.csv", "text/csv")
     else:
-        st.write(
-            f"The system classified this as **Genuine News** because the language and source match those from "
-            f"trusted news articles. With a confidence of **{confidence*100:.2f}%**, "
-            f"the prediction reliability is **{level}**."
-        )
+        st.info("No data yet.")
