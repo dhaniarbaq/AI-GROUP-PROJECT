@@ -1,24 +1,19 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import spacy
+from textblob import TextBlob
+
+# Load English NLP model
+nlp = spacy.load("en_core_web_sm")
 
 # ----------------- Sidebar -----------------
-st.sidebar.title("🧠 Disinformation Pattern Recognition")
-
-# Pattern Library Section
-st.sidebar.subheader("📚 Pattern Library")
-pattern_options = [
-    "🔎 Emotional Amplification",
-    "🔎 False Urgency",
-    "🔎 Source Obfuscation",
-    "🔎 Binary Narrative"
-]
-selected_pattern = st.sidebar.radio("Select a Pattern", pattern_options)
+st.sidebar.title("📰 Fake News Detection System")
 
 # Quick Analysis Button
 st.sidebar.subheader("⚡ Quick Analysis")
 if st.sidebar.button("Run Quick Analysis"):
-    st.sidebar.success(f"Quick analysis triggered for {selected_pattern}!")
+    st.sidebar.success("Quick analysis triggered!")
 
 # Analysis Dashboard Section
 st.sidebar.subheader("📊 Analysis Dashboard")
@@ -26,50 +21,78 @@ st.sidebar.info("No analyses yet. Start by analyzing text above!")
 
 # System Info Section
 st.sidebar.subheader("ℹ️ System Info")
-st.sidebar.text("Version: 2.1 Pattern Recognition")
-st.sidebar.text("Patterns: 8 disinformation + 5 authenticity")
-st.sidebar.text("Algorithm: Weighted pattern matching")
+st.sidebar.text("Version: 1.0 Fake News Detection")
+st.sidebar.text("Patterns: 8 fake news + 5 credibility checks")
+st.sidebar.text("Algorithm: NLP & Weighted Pattern Matching")
 
 # ----------------- Main Tabs -----------------
-tabs = ["Home", "Pattern Recognition", "Text Analyzer", "Dashboard", "Reports", "Settings"]
+tabs = ["Home", "Fake News Detection", "Text Analyzer", "Dashboard", "Reports", "Settings"]
 selected_tab = st.tabs(tabs)
+
+# Fake news patterns with keywords and explanations
+fake_patterns = {
+    "Clickbait Headlines": {
+        "desc": "Sensational headlines designed to get clicks, often misleading.",
+        "keywords": ["shocking", "you won't believe", "amazing", "secret", "revealed"]
+    },
+    "False Urgency": {
+        "desc": "Content that pressures you to act immediately.",
+        "keywords": ["urgent", "immediately", "act now", "last chance"]
+    },
+    "Anonymous Sources": {
+        "desc": "Information from unverifiable or hidden sources.",
+        "keywords": ["anonymous", "unknown source", "unverified", "reportedly"]
+    },
+    "Manipulated Media": {
+        "desc": "Images, videos, or quotes that are altered to mislead.",
+        "keywords": ["edited", "photoshopped", "fake video", "misleading image"]
+    },
+    "Polarizing Narrative": {
+        "desc": "Oversimplifies events into us vs them or good vs evil.",
+        "keywords": ["enemy", "betray", "us vs them", "all or nothing"]
+    }
+}
 
 # ----- Tab 1: Home -----
 with selected_tab[0]:
-    st.header("Welcome to the Disinformation Pattern Recognition System")
+    st.header("Welcome to the Fake News Detection System")
     st.write("""
-        This system helps detect and analyze disinformation patterns in text.  
-        Use the sidebar to select patterns or run quick analyses.  
-        Navigate through the tabs to access the full features.  
+        Automatically detect fake news and questionable content using NLP.  
+        No need to manually select patterns—simply input your text to get instant insights.  
     """)
     st.image("https://cdn-icons-png.flaticon.com/512/2910/2910762.png", width=200)
 
-    st.subheader("Disinformation Pattern Library 📚")
-    
-    # Patterns with description and captions
-    patterns_info = {
-        "🔎 Emotional Amplification": "Texts that exaggerate emotions to provoke anger, fear, or excitement. \n*Caption:* Recognize when content is trying to push your emotional buttons.",
-        "🔎 False Urgency": "Messages that create a sense of immediate threat or opportunity. \n*Caption:* Spot the rush tactics before reacting impulsively.",
-        "🔎 Source Obfuscation": "Information that hides or misrepresents the source to seem credible. \n*Caption:* Check if the source is trustworthy.",
-        "🔎 Binary Narrative": "Content that oversimplifies complex issues into 'good vs. evil' or 'us vs. them'. \n*Caption:* Beware of black-and-white thinking in media."
-    }
-    
-    for pattern, description in patterns_info.items():
+    st.subheader("Fake News Patterns Library 📚")
+    for pattern, info in fake_patterns.items():
         st.markdown(f"**{pattern}**")
-        st.info(description)
+        st.info(f"{info['desc']}\n*Caption:* Helps identify when news might be misleading or fake.")
 
-# ----- Tab 2: Pattern Recognition -----
+# ----- Tab 2: Fake News Detection -----
 with selected_tab[1]:
-    st.header("Pattern Recognition")
-    st.write(f"You selected: **{selected_pattern}**")
+    st.header("Fake News Detection")
     
-    text_input = st.text_area("Enter text to analyze for disinformation patterns:", "")
+    text_input = st.text_area("Enter text to analyze for fake news:", "")
     
-    if st.button("Analyze Text"):
+    if st.button("Analyze Text Automatically"):
         if text_input.strip() != "":
-            # Dummy pattern detection logic
-            st.success(f"Analysis complete for pattern: {selected_pattern}")
-            st.write(f"Detected {np.random.randint(0, 5)} instances of {selected_pattern}")
+            doc = nlp(text_input.lower())
+            detected_patterns = []
+            for pattern, info in fake_patterns.items():
+                for keyword in info["keywords"]:
+                    if keyword.lower() in text_input.lower():
+                        detected_patterns.append(pattern)
+                        break  # Only detect once per pattern
+            
+            # Sentiment check (optional)
+            sentiment = TextBlob(text_input).sentiment
+            st.write(f"Text Sentiment: Polarity={sentiment.polarity:.2f}, Subjectivity={sentiment.subjectivity:.2f}")
+            
+            if detected_patterns:
+                st.error("Potential Fake News Detected:")
+                for p in detected_patterns:
+                    st.write(f"- {p}")
+            else:
+                st.success("No major fake news patterns detected.")
         else:
             st.warning("Please enter some text to analyze!")
 
@@ -88,11 +111,10 @@ with selected_tab[2]:
             st.write(f"Total words: {word_count}")
             st.write(f"Unique words: {unique_words}")
             
-            # Dummy sentiment example
-            positive = np.random.randint(0, 10)
-            negative = np.random.randint(0, 10)
-            st.write(f"Positive sentiment words: {positive}")
-            st.write(f"Negative sentiment words: {negative}")
+            # Sentiment analysis
+            sentiment = TextBlob(text_input2).sentiment
+            st.write(f"Polarity: {sentiment.polarity:.2f}")
+            st.write(f"Subjectivity: {sentiment.subjectivity:.2f}")
         else:
             st.warning("Enter some text for analysis!")
 
@@ -101,10 +123,9 @@ with selected_tab[3]:
     st.header("📊 Analysis Dashboard")
     st.write("Visualizations and analysis summary")
     
-    # Dummy chart example
     data = pd.DataFrame({
-        'Pattern': ["Emotional Amplification", "False Urgency", "Source Obfuscation", "Binary Narrative"],
-        'Count': np.random.randint(0, 10, 4)
+        'Pattern': list(fake_patterns.keys()),
+        'Count': np.random.randint(0, 10, len(fake_patterns))
     })
     st.bar_chart(data.set_index('Pattern'))
 
@@ -114,22 +135,22 @@ with selected_tab[4]:
     st.write("Download analysis results")
     
     dummy_report = pd.DataFrame({
-        "Pattern": pattern_options,
-        "Instances Detected": np.random.randint(0, 10, 4)
+        "Pattern": list(fake_patterns.keys()),
+        "Instances Detected": np.random.randint(0, 10, len(fake_patterns))
     })
     
     st.dataframe(dummy_report)
     
     csv = dummy_report.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Report as CSV", csv, "analysis_report.csv", "text/csv")
+    st.download_button("Download Report as CSV", csv, "fake_news_report.csv", "text/csv")
 
 # ----- Tab 6: Settings -----
 with selected_tab[5]:
     st.header("Settings")
     st.write("Configure system preferences")
     
-    version = st.text_input("System Version", "2.1 Pattern Recognition")
-    algorithm = st.text_input("Detection Algorithm", "Weighted pattern matching")
+    version = st.text_input("System Version", "1.0 Fake News Detection")
+    algorithm = st.text_input("Detection Algorithm", "NLP & Weighted Pattern Matching")
     
     if st.button("Save Settings"):
         st.success("Settings saved successfully!")
