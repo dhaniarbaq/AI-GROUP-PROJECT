@@ -1,30 +1,41 @@
 import streamlit as st
+import pandas as pd
+import numpy as np
 
-# -------------------------
-# System Info
-# -------------------------
-SYSTEM_VERSION = "2.1 Pattern Recognition"
-TOTAL_DISINFO_PATTERNS = 8
-TOTAL_AUTH_PATTERNS = 5
-ALGORITHM = "Weighted pattern matching"
+# ----------------- Sidebar -----------------
+st.sidebar.title("🧠 Disinformation Pattern Recognition")
 
-# -------------------------
-# Sidebar
-# -------------------------
-st.sidebar.title("Disinformation Pattern Recognition")
-sidebar_options = [
-    "📚 Pattern Library",
-    "⚡ Quick Analysis",
-    "📊 Analysis Dashboard",
-    "ℹ️ System Info"
+# Pattern Library Section
+st.sidebar.subheader("📚 Pattern Library")
+pattern_options = [
+    "🔎 Emotional Amplification",
+    "🔎 False Urgency",
+    "🔎 Source Obfuscation",
+    "🔎 Binary Narrative"
 ]
-selected_tab = st.sidebar.radio("Navigate", sidebar_options)
+selected_pattern = st.sidebar.radio("Select a Pattern", pattern_options)
 
-# -------------------------
-# Tabs / Pages
-# -------------------------
-# ----- Tab 1: Home / Pattern Library -----
-if selected_tab == "📚 Pattern Library":
+# Quick Analysis Button
+st.sidebar.subheader("⚡ Quick Analysis")
+if st.sidebar.button("Run Quick Analysis"):
+    st.sidebar.success(f"Quick analysis triggered for {selected_pattern}!")
+
+# Analysis Dashboard Section
+st.sidebar.subheader("📊 Analysis Dashboard")
+st.sidebar.info("No analyses yet. Start by analyzing text above!")
+
+# System Info Section
+st.sidebar.subheader("ℹ️ System Info")
+st.sidebar.text("Version: 2.1 Pattern Recognition")
+st.sidebar.text("Patterns: 8 disinformation + 5 authenticity")
+st.sidebar.text("Algorithm: Weighted pattern matching")
+
+# ----------------- Main Tabs -----------------
+tabs = ["Home", "Pattern Recognition", "Text Analyzer", "Dashboard", "Reports", "Settings"]
+selected_tab = st.tabs(tabs)
+
+# ----- Tab 1: Home -----
+with selected_tab[0]:
     st.header("Welcome to the Disinformation Pattern Recognition System")
     st.write("""
         This system helps detect and analyze disinformation patterns in text.  
@@ -32,10 +43,10 @@ if selected_tab == "📚 Pattern Library":
         Navigate through the tabs to access the full features.  
     """)
     st.image("https://cdn-icons-png.flaticon.com/512/2910/2910762.png", width=200)
-    
+
     st.subheader("Disinformation Pattern Library 📚")
     
-    # Define patterns with descriptions and captions
+    # Patterns with description and captions
     patterns_info = {
         "🔎 Emotional Amplification": "Texts that exaggerate emotions to provoke anger, fear, or excitement. \n*Caption:* Recognize when content is trying to push your emotional buttons.",
         "🔎 False Urgency": "Messages that create a sense of immediate threat or opportunity. \n*Caption:* Spot the rush tactics before reacting impulsively.",
@@ -47,31 +58,78 @@ if selected_tab == "📚 Pattern Library":
         st.markdown(f"**{pattern}**")
         st.info(description)
 
-# ----- Tab 2: Quick Analysis -----
-elif selected_tab == "⚡ Quick Analysis":
-    st.header("Quick Analysis ⚡")
-    st.write("Paste your text below and the system will detect potential disinformation patterns.")
-    user_input = st.text_area("Enter text to analyze:", height=200)
+# ----- Tab 2: Pattern Recognition -----
+with selected_tab[1]:
+    st.header("Pattern Recognition")
+    st.write(f"You selected: **{selected_pattern}**")
     
-    if st.button("Analyze"):
-        if user_input.strip() == "":
-            st.warning("Please enter some text to analyze.")
+    text_input = st.text_area("Enter text to analyze for disinformation patterns:", "")
+    
+    if st.button("Analyze Text"):
+        if text_input.strip() != "":
+            # Dummy pattern detection logic
+            st.success(f"Analysis complete for pattern: {selected_pattern}")
+            st.write(f"Detected {np.random.randint(0, 5)} instances of {selected_pattern}")
         else:
-            # Fake analysis logic for demonstration
-            st.success("Analysis complete! ⚡")
-            detected_patterns = ["Emotional Amplification", "False Urgency"]  # Example
-            st.write("Detected patterns:")
-            for p in detected_patterns:
-                st.write(f"- {p}")
+            st.warning("Please enter some text to analyze!")
 
-# ----- Tab 3: Analysis Dashboard -----
-elif selected_tab == "📊 Analysis Dashboard":
-    st.header("Analysis Dashboard 📊")
-    st.write("No analyses yet. Start by analyzing text above!")
+# ----- Tab 3: Text Analyzer -----
+with selected_tab[2]:
+    st.header("Text Analyzer")
+    st.write("Perform sentiment and word frequency analysis")
+    
+    text_input2 = st.text_area("Enter text for analysis:", "")
+    
+    if st.button("Run Text Analysis"):
+        if text_input2.strip() != "":
+            words = text_input2.split()
+            word_count = len(words)
+            unique_words = len(set(words))
+            st.write(f"Total words: {word_count}")
+            st.write(f"Unique words: {unique_words}")
+            
+            # Dummy sentiment example
+            positive = np.random.randint(0, 10)
+            negative = np.random.randint(0, 10)
+            st.write(f"Positive sentiment words: {positive}")
+            st.write(f"Negative sentiment words: {negative}")
+        else:
+            st.warning("Enter some text for analysis!")
 
-# ----- Tab 4: System Info -----
-elif selected_tab == "ℹ️ System Info":
-    st.header("System Info ℹ️")
-    st.markdown(f"- **Version:** {SYSTEM_VERSION}")
-    st.markdown(f"- **Patterns:** {TOTAL_DISINFO_PATTERNS} disinformation + {TOTAL_AUTH_PATTERNS} authenticity")
-    st.markdown(f"- **Algorithm:** {ALGORITHM}")
+# ----- Tab 4: Dashboard -----
+with selected_tab[3]:
+    st.header("📊 Analysis Dashboard")
+    st.write("Visualizations and analysis summary")
+    
+    # Dummy chart example
+    data = pd.DataFrame({
+        'Pattern': ["Emotional Amplification", "False Urgency", "Source Obfuscation", "Binary Narrative"],
+        'Count': np.random.randint(0, 10, 4)
+    })
+    st.bar_chart(data.set_index('Pattern'))
+
+# ----- Tab 5: Reports -----
+with selected_tab[4]:
+    st.header("Reports")
+    st.write("Download analysis results")
+    
+    dummy_report = pd.DataFrame({
+        "Pattern": pattern_options,
+        "Instances Detected": np.random.randint(0, 10, 4)
+    })
+    
+    st.dataframe(dummy_report)
+    
+    csv = dummy_report.to_csv(index=False).encode('utf-8')
+    st.download_button("Download Report as CSV", csv, "analysis_report.csv", "text/csv")
+
+# ----- Tab 6: Settings -----
+with selected_tab[5]:
+    st.header("Settings")
+    st.write("Configure system preferences")
+    
+    version = st.text_input("System Version", "2.1 Pattern Recognition")
+    algorithm = st.text_input("Detection Algorithm", "Weighted pattern matching")
+    
+    if st.button("Save Settings"):
+        st.success("Settings saved successfully!")
