@@ -1,118 +1,132 @@
-# fake_news_app.py
-
 import streamlit as st
 import pandas as pd
 import numpy as np
+import random
 from textblob import TextBlob
-import matplotlib.pyplot as plt
-from wordcloud import WordCloud
 
-# ----------------- Sidebar -----------------
+# ---------------- Sidebar ----------------
 st.sidebar.title("📰 Fake News Detection System")
 
-# Quick Info
+st.sidebar.subheader("⚡ Quick Analysis")
+st.sidebar.write("Automatically detects fake news using NLP")
+
+st.sidebar.subheader("📊 Analysis Dashboard")
+st.sidebar.info("Analyze text to populate dashboard")
+
 st.sidebar.subheader("ℹ️ System Info")
-st.sidebar.text("Version: 1.0 Fake News Detection")
-st.sidebar.text("Algorithm: NLP-based automatic detection")
-st.sidebar.text("Features: Detection, Dashboard, Reports, Settings")
+st.sidebar.text("Version: 1.0")
+st.sidebar.text("Method: NLP + Heuristics")
+st.sidebar.text("Mode: Automatic Detection")
 
-# ----------------- Tabs -----------------
+# ---------------- Tabs ----------------
 tabs = ["Home", "Analyzer", "Dashboard", "Reports", "Settings"]
-selected_tab = st.tabs(tabs)
+tab_home, tab_analyzer, tab_dashboard, tab_reports, tab_settings = st.tabs(tabs)
 
-# ----------------- Tab 1: Home -----------------
-with selected_tab[0]:
+# ---------------- Home ----------------
+with tab_home:
     st.header("Welcome to the Fake News Detection System")
     st.write("""
-        This system automatically detects potential fake news in text using NLP techniques.
-        You can analyze text, view dashboards of patterns, download reports, and customize settings.
-    """)
-    st.image("https://cdn-icons-png.flaticon.com/512/2910/2910762.png", width=200)
-    st.subheader("How the Detection Works:")
-    st.markdown("""
-    - **Polarity:** Measures the sentiment (-1 negative, 0 neutral, 1 positive).  
-      Fake news often uses extreme sentiment.  
-    - **Subjectivity:** Measures objectivity (0 objective, 1 subjective).  
-      High subjectivity may indicate sensationalism.  
-    - **Keywords:** Highlights suspicious or unusual words that often appear in fake news.  
-    - **Confidence Score:** Combines all metrics into a probability of being fake news.  
+    This web application helps users identify **potential fake news** using
+    Natural Language Processing (NLP).
+
+    The system analyzes:
+    - Emotional extremeness
+    - Subjectivity
+    - Sensational wording
+
+    No manual pattern selection is required.
     """)
 
-# ----------------- Tab 2: Analyzer -----------------
-with selected_tab[1]:
-    st.header("📝 Analyze Text")
-    text_input = st.text_area("Enter text to analyze:", "")
+    st.subheader("Why Fake News Detection Matters")
+    st.write("""
+    Fake news can manipulate opinions, spread panic, and misinform the public.
+    This system provides an **early warning indicator**, not a final judgment.
+    """)
 
-    if st.button("Run Analysis"):
-        if text_input.strip() != "":
+# ---------------- Analyzer ----------------
+with tab_analyzer:
+    st.header("🧠 Fake News Analyzer")
+
+    # Sample sentence generator
+    if st.button("🎲 Generate Sample Sentences"):
+        samples = [
+            "Breaking news: Scientists discover a miracle cure overnight!",
+            "Government secretly approves new law banning cash next month.",
+            "Experts warn that phones will explode if not turned off tonight.",
+            "Celebrity claims drinking salt water cures all diseases.",
+            "Shocking report reveals humans may not need sleep anymore.",
+            "New study says chocolate guarantees weight loss in two days."
+        ]
+        generated_text = "\n".join(random.sample(samples, 3))
+        st.session_state["text_input"] = generated_text
+
+    text_input = st.text_area(
+        "Enter text to analyze:",
+        value=st.session_state.get("text_input", ""),
+        height=180
+    )
+
+    if st.button("🔍 Analyze Text"):
+        if text_input.strip() == "":
+            st.warning("Please enter or generate text first.")
+        else:
             blob = TextBlob(text_input)
             polarity = blob.sentiment.polarity
             subjectivity = blob.sentiment.subjectivity
 
-            # Confidence score: weighted combination of subjectivity & polarity extremeness
-            confidence = round(min(1.0, (abs(polarity) + subjectivity) / 2), 2)
+            # Fake news confidence score
+            score = round((abs(polarity) + subjectivity) / 2, 2)
 
-            if confidence > 0.5:
-                result = "Likely Fake News ⚠️"
+            if score >= 0.6:
+                result = "⚠️ Likely Fake News"
             else:
-                result = "Likely Genuine ✅"
+                result = "✅ Likely Genuine News"
 
-            st.subheader("Analysis Result")
-            st.write(f"**Result:** {result}")
-            st.write(f"**Polarity:** {polarity}")
-            st.write(f"**Subjectivity:** {subjectivity}")
-            st.write(f"**Confidence Score:** {confidence * 100}%")
+            st.subheader("Result")
+            st.write(f"**Prediction:** {result}")
+            st.write(f"**Confidence Score:** {score * 100:.0f}%")
+            st.write(f"Polarity: {polarity:.2f}")
+            st.write(f"Subjectivity: {subjectivity:.2f}")
 
-            # Highlight keywords
-            words = text_input.split()
-            suspicious_words = [word for word in words if len(word) > 6]  # simplistic example
-            st.subheader("Suspicious Keywords")
-            st.write(", ".join(suspicious_words) if suspicious_words else "None found")
+# ---------------- Dashboard ----------------
+with tab_dashboard:
+    st.header("📊 Analysis Dashboard")
 
-        else:
-            st.warning("Please enter text to analyze!")
-
-# ----------------- Tab 3: Dashboard -----------------
-with selected_tab[2]:
-    st.header("📊 Dashboard")
-    st.write("Visualizations of text analyses")
-
-    # Dummy data example
-    patterns = ["Likely Fake", "Likely Genuine"]
-    counts = np.random.randint(0, 20, 2)
-    df_dashboard = pd.DataFrame({"Category": patterns, "Count": counts})
-    st.bar_chart(df_dashboard.set_index("Category"))
-
-    # Word cloud visualization
-    st.subheader("Word Cloud Example")
-    sample_text = "Fake news detection system text analysis dashboard visualization".lower()
-    wc = WordCloud(width=600, height=300, background_color="white").generate(sample_text)
-    plt.imshow(wc, interpolation='bilinear')
-    plt.axis("off")
-    st.pyplot(plt)
-
-# ----------------- Tab 4: Reports -----------------
-with selected_tab[3]:
-    st.header("📑 Reports")
-    st.write("Download analysis results")
-
-    # Example report
-    dummy_report = pd.DataFrame({
-        "Text": ["Sample text 1", "Sample text 2"],
-        "Result": ["Likely Fake", "Likely Genuine"],
-        "Confidence": [0.82, 0.35]
+    data = pd.DataFrame({
+        "Category": ["Likely Fake", "Likely Genuine"],
+        "Count": np.random.randint(1, 10, 2)
     })
-    st.dataframe(dummy_report)
 
-    csv = dummy_report.to_csv(index=False).encode('utf-8')
-    st.download_button("Download Report as CSV", csv, "fake_news_report.csv", "text/csv")
+    st.bar_chart(data.set_index("Category"))
 
-# ----------------- Tab 5: Settings -----------------
-with selected_tab[4]:
+    st.caption("Dashboard shows simulated results for demonstration.")
+
+# ---------------- Reports ----------------
+with tab_reports:
+    st.header("📄 Reports")
+
+    report = pd.DataFrame({
+        "Text Sample": ["Sample A", "Sample B", "Sample C"],
+        "Prediction": ["Likely Fake", "Likely Genuine", "Likely Fake"],
+        "Confidence (%)": [82, 34, 71]
+    })
+
+    st.dataframe(report)
+
+    csv = report.to_csv(index=False).encode("utf-8")
+    st.download_button(
+        "⬇️ Download CSV Report",
+        csv,
+        "fake_news_report.csv",
+        "text/csv"
+    )
+
+# ---------------- Settings ----------------
+with tab_settings:
     st.header("⚙️ Settings")
-    st.write("Configure system preferences")
-    version = st.text_input("System Version", "1.0 Fake News Detection")
-    algorithm = st.text_input("Detection Algorithm", "NLP-based automatic detection")
 
-    if st.button("Save Settings"):
+    version = st.text_input("System Version", "1.0")
+    method = st.text_input("Detection Method", "NLP + Heuristics")
+
+    if st.button("💾 Save Settings"):
         st.success("Settings saved successfully!")
